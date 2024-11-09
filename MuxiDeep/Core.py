@@ -5,6 +5,8 @@ import contextlib
 
 # region else func
 def as_array(input):
+    if isinstance(input, Variable):
+        return input
     if np.isscalar(input):
         return np.array(input)
 
@@ -13,13 +15,6 @@ def as_variable(input):
         return input
     else:
         return Variable(input)
-
-def numerical_diff(f,x,eps=1e-4):
-    x0 = Variable(as_array(x.data - eps))
-    x1 = Variable(as_array(x.data + eps))
-    y0 = f(x0)
-    y1 = f(x1)
-    return (y1.data - y0.data) / (2 * eps)
 
 @contextlib.contextmanager
 def using_config(name, value):
@@ -44,7 +39,7 @@ class Config:
 
 class Variable:
 
-    __array_priority__ = 200 # 提高Variable类中运算符方法在实际运算时的优先级，以实现
+    __array_priority__ = 200 # 提高Variable类中运算符方法在实际运算时的优先级，以实现和ndarray同时进行计算
 
     def __init__(self, data,name = None):
         if data is not None:
@@ -121,22 +116,11 @@ class Variable:
             return 'variable(None)'
         p = str(self.data).replace('\n', '\n' + ' ' * 9)
         return 'variable(' + p + ')'
-    
-    def __add__(self, other):
-        return add(self, other)
-    #解决左项为float或int的情况下的问题
-    def __radd__(self, other):
-        return add(self,other)
-    
-    def __mul__(self,other):
-        return mul(self, other)
-    
-    def __rmul__(self, other):
-        return mul(self, other)
 
 class Function:
     def __call__(self, *inputs):
-        xs = [as_variable(x) for x in inputs]
+        inputs = [as_variable(x) for x in inputs]
+        xs = [x.data for x in inputs]
         ys = self.forward(*xs)#使用星号解包
 
         if not isinstance(ys, tuple):
@@ -145,7 +129,7 @@ class Function:
         outputs = [Variable(as_array(y)) for y in ys]
         
         if Config.enable_backprop:
-            self.generation = max([x.generation for x in xs])
+            self.generation = max([x.generation for x in inputs])
             for output in outputs:
                 output.set_creator(self)
 
@@ -166,15 +150,14 @@ class Function:
 # region define function class
 class Add(Function):
     def forward(self,x0,x1):
-        y = x0.data + x1.data
+        y = x0 + x1
         return y
     
     def backward(self,gy):
         return gy, gy
 
 class Square(Function):
-    def forward(self, ix):
-        x = ix.data
+    def forward(self, x):
         return x ** 2
     
     def backward(self, gy):
@@ -184,7 +167,7 @@ class Square(Function):
 
 class Exp(Function):
     def forward(self, x):
-        return np.exp(x.data)
+        return np.exp(x)
     
     def backward(self, gy):
         x = self.inputs[0].data
@@ -193,12 +176,51 @@ class Exp(Function):
     
 class Mul(Function):
     def forward(self, x0, x1):
-        y = x0.data * x1.data
+        y = x0 * x1
         return y
     
     def backward(self, gy):
         x0, x1 = self.inputs[0].data, self.inputs[1].data
-        return x0 * gy, x1 * gy
+        return x1 * gy, x0 * gy
+    
+class Neg(Function):
+    def forward(self, x):
+        return -x
+    
+    def backward(self, gy):
+        return -gy
+    
+class Sub(Function):
+    def forward(self, x0, x1):
+        y = x0 - x1
+        return y
+    
+    def backward(self, gy):
+        return gy, -gy
+
+class Div(Function):
+    def forward(self, x0, x1):
+        y = x0 / x1
+        return y
+    def backward(self, gy):
+        x0, x1 = self.inputs[0].data, self.inputs[1].data
+        gx0 = gy/x0
+        gx1 = - gy * (x0 / x1 ** 2)
+        return gx0, gx1
+    
+class Pow(Function):
+    def __init__(self, c):
+        self.c = c
+
+    def forward(self, x):
+        y = x ** self.c
+        return y
+    
+    def backward(self, gy):
+        x = self.inputs[0].data
+        c = self.c
+        gx = c * x ** (c-1) * gy
+        return gx
 # endregion    
 
 # region define function
@@ -215,10 +237,43 @@ def add(x0, x1):
 def mul(x0, x1):
     x1 = as_array(x1)
     return Mul()(x0, x1)
-# endregion
 
+def neg(x):
+    return Neg()(x)
+
+def sub(x0, x1):
+    x1 = as_array(x1)
+    return Sub()(x0, x1)
+
+def rsub(x0, x1):
+    x1 = as_array(x1)
+    return Sub()(x1, x0)
+
+def div(x0, x1):
+    x1 = as_array(x1)
+    return Div()(x0, x1)
+
+def rdiv(x0, x1):
+    x1 = as_array(x1)
+    return Div()(x1, x0)
+
+def pow(x, c):
+    return Pow(c)(x)
+# endregion
+def setup_variable():
+    Variable.__add__ = add
+    Variable.__radd__ = add
+    Variable.__mul__ = mul
+    Variable.__rmul__ = mul
+    Variable.__neg__ = neg
+    Variable.__sub__ = sub
+    Variable.__rsub__ = rsub
+    Variable.__div__ = div
+    Variable.__rdiv__ = rdiv
+    Variable.__pow__ = pow
 #主函数
 if __name__ == '__main__':
+    setup_variable()
     x = Variable(np.array(2.0))
     a = square(x)
     b = square(a) + square(a)
@@ -227,4 +282,5 @@ if __name__ == '__main__':
     c.backward()
     print(c.data,b.data,a.data)
     print(c.grad,b.grad, a.grad, x.grad)
-    
+    print(-x)
+    print(x ** 3)
