@@ -118,7 +118,7 @@ class Variable:
         return 'variable(' + p + ')'
 
 class Function:
-    def __call__(self, *inputs):
+    def __call__(self, *inputs, name = None):
         inputs = [as_variable(x) for x in inputs]
         xs = [x.data for x in inputs]
         ys = self.forward(*xs)#使用星号解包
@@ -132,7 +132,7 @@ class Function:
             self.generation = max([x.generation for x in inputs])
             for output in outputs:
                 output.set_creator(self)
-
+        self.name = name
         self.inputs = inputs
         self.outputs = [weakref.ref(output) for output in outputs]
         return outputs if len(outputs) > 1 else outputs[0]
@@ -149,6 +149,7 @@ class Function:
 
 # region define function class
 class Add(Function):
+    
     def forward(self,x0,x1):
         y = x0 + x1
         return y
