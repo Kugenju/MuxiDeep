@@ -32,7 +32,7 @@ class SquareTest(unittest.TestCase):
         y = md.square(a) + md.square(a) + 9 * x
         y.backward()
         excepted = 73.0
-        self.assertEqual(x.grad, excepted)
+        self.assertEqual(x.grad.data, excepted)
 
 
 class diffTest(unittest.TestCase):
@@ -41,7 +41,7 @@ class diffTest(unittest.TestCase):
         y = md.exp(x)
         y.backward()
         num_grad = numerical_diff(md.exp, x)
-        flg = np.allclose(x.grad, num_grad)
+        flg = np.allclose(x.grad.data, num_grad)
         self.assertTrue(flg)
 
     def test_Squre(self):
@@ -49,7 +49,7 @@ class diffTest(unittest.TestCase):
         y = md.square(x)
         y.backward()
         num_grad = numerical_diff(md.square, x)
-        flg = np.allclose(x.grad, num_grad)
+        flg = np.allclose(x.grad.data, num_grad)
         self.assertTrue(flg)
 
     def test_Sub(self):
@@ -68,8 +68,18 @@ class diffTest(unittest.TestCase):
         z.backward()
         except1 = -5376.0
         except2 = 8064.0
-        self.assertEqual(x.grad, except1)
-        self.assertEqual(y.grad, except2)
+        self.assertEqual(x.grad.data, except1)
+        self.assertEqual(y.grad.data, except2)
 
+class broadcastTest(unittest.TestCase):
+    def test_bs_add(self):
+        x0 = md.Variable(np.array([1,2,3]))
+        x1 = md.Variable(np.array([10]))
+        y = x0 + x1
+        y.backward()
+        except1 = np.array([11,12,13])
+        except2 = np.array([3])
+        self.assertTrue(np.array_equal(y.data, except1))
+        self.assertTrue(np.array_equal(x1.grad.data, except2))
 
 unittest.main()
