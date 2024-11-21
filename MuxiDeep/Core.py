@@ -145,6 +145,10 @@ class Variable:
         if len(shape) == 1 and isinstance(shape[0], (tuple, list)):
             shape = shape[0]
         return reshape(self, shape)
+    
+    def sum(self):
+        return sum(self)
+
 
 class Function:
     def __call__(self, *inputs, name = None):
@@ -175,6 +179,40 @@ class Function:
     def __lt__(self, other):
         return self.generation < other.generation
 
+class Parameter(Variable):
+    pass
+
+class Layer:
+    def __init__(self):
+        self._params = set()
+
+    def __setattr__(self, name: str, value):
+        # 只有Parameter类的实例会被储存为参数
+        if isinstance(value, Parameter):
+            self._params.add(name)
+        super.__setattr__(name, value)
+        #layer.p1 = Parameter(np.array(1.0))
+
+    def __call__(self, *inputs):
+        outputs = self.forward(*inputs)
+        if not isinstance(outputs, tuple):
+            outputs = (outputs,)#处理返回值为一个的情况
+        self.inputs = [weakref.ref(x) for x in inputs]
+        self.outputs = [weakref.ref(y) for y in outputs]
+        return outputs if len(outputs) > 1 else outputs[0]
+        
+
+    def forward(self, inputs):
+        raise NotImplementedError()
+    
+    def params(self):
+        for name in self._params:
+            yield self.__dict__[name]
+            #yield类似于return，区别是yield会暂停处理并返回值，在此使用yield语句会恢复执行处理
+
+    def cleangrads(self):
+        for param in self.params():
+            param.cleangrad()
 
 # region define function class
 class Add(Function):
@@ -317,9 +355,22 @@ class Sum_To(Function):
     def backward(self, gy):
         gx = broadcast_to(gy, self.x_shape)
         return gx
+    
+class Sum(Function):
+    def forward(self, x):
+        self.x_shape = x.shape
+        y = x.sum()
+        return y
+    
+    def backward(self, gy):
+        gx = broadcast_to(gy, self.x_shape)
+        return gx
 # endregion    
 
 # region define function
+def sum(x):
+    return Sum()(x)
+
 def square(x):
     return Square()(x)
 

@@ -5,6 +5,7 @@ if '__file__' in globals():
 import unittest
 import MuxiDeep as md
 import numpy as np
+import MuxiDeep.functions as F
 
 
 def numerical_diff(f,x,eps=1e-4):
@@ -82,4 +83,33 @@ class broadcastTest(unittest.TestCase):
         self.assertTrue(np.array_equal(y.data, except1))
         self.assertTrue(np.array_equal(x1.grad.data, except2))
 
+    def test_linear(self):
+        np.random.seed(0)
+        x = np.random.rand(100,1)
+        y = 5 + 2 * x + np.random.rand(100, 1)
+
+        W = md.Variable(np.zeros((1,1)))
+        b = md.Variable(np.zeros(1))
+
+        def predict(x):
+            y = F.matmul(x, W) + b
+            return y
+
+        lr = 0.1
+        iters = 100
+
+        for i in range(iters):
+            y_pred = predict(x)
+            loss = F.mean_square_error(y, y_pred)
+
+            W.cleargrad()
+            b.cleargrad()
+            loss.backward()
+
+            W.data -= lr * W.grad.data
+            b.data -= lr * b.grad.data
+        except1 = np.array([[2.11807369]])
+        except2 = np.array([[5.46608905]])
+        self.assertTrue(np.allclose(W.data, except1))
+        self.assertTrue(np.allclose(b.data, except2))
 unittest.main()

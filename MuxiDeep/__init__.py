@@ -7,5 +7,8 @@ from MuxiDeep.Core import as_variable
 from MuxiDeep.Core import setup_variable
 from MuxiDeep.Core import square
 from MuxiDeep.Core import exp
+from MuxiDeep.Core import broadcast_to
+from MuxiDeep.Core import Layer
+from MuxiDeep.Core import Parameter
 
 setup_variable()
